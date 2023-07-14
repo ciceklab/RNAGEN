@@ -1,4 +1,4 @@
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 
 def leakyrelu(input, alpha=0.3):
@@ -9,7 +9,7 @@ def mlp_generator(inputs, dim, input_size, output_size, num_layers=4):
   for layer in range(num_layers):
     in_size = input_size if layer == 0 else dim
     out_size = output_size if layer == num_layers - 1 else dim
-    W = tf.get_variable('Layer_{}/Weights'.format(layer),
+    W = tf.get_variable('Layer_{}/Weights'.format(layer)  ,
                         #validate_shape=False,
                         initializer=tf.truncated_normal(shape=[in_size, out_size], stddev=tf.sqrt(2. / tf.cast(in_size, tf.float32))))
     b = tf.get_variable('Layer_{}/Bias'.format(layer), initializer=tf.constant(0.0, shape=[out_size]))
@@ -61,7 +61,7 @@ def resnet_generator(inputs, num_channels, seq_len, vocab_size, annotated=False,
                             initializer=tf.random_uniform(shape=[1, num_channels, vocab_size],
                                                             minval=-tf.sqrt(3.) * tf.sqrt(4. / tf.cast(1 * num_channels + 1 * vocab_size, tf.float32)),
                                                             maxval=tf.sqrt(3.) * tf.sqrt(4. / tf.cast(1 * num_channels + 1 * vocab_size, tf.float32)))) #(width, in_chan, out_chan)
-  conv = tf.nn.conv1d(outputs, filters, stride=1, padding="SAME") #(batch, width, out_chan)
+  conv = tf.nn.conv1d(outputs, filters, stride=1, padding="SAME")
   bias = tf.get_variable('Layer_{}/bias'.format(layer + 2), initializer=tf.constant(0.0, shape=[vocab_size]))
   output = conv + bias
   if annotated:

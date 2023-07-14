@@ -11,7 +11,17 @@ import numpy as np
 np.random.seed(1337)
 import pandas as pd
 pd.options.mode.chained_assignment = None 
+import argparse
 import RNA
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-p1', type=str, required=False, default='SOX4')
+parser.add_argument('-p2', type=str, required=False, default='SOX2')
+parser.add_argument('-n1', type=int, required=False, default=3000)
+parser.add_argument('-n2', type=int, required=False, default=800)
+
+args = parser.parse_args()
 
 # Dont use GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -59,10 +69,8 @@ if __name__ == "__main__":
     BATCH_SIZE = 2048
     np.random.seed(35)
 
-    init_path = './../data/SOX4/SOX4_initial_binding_scores.txt'
-    # init_path = './../data/SOX4-SOX2_maxiters_100/SOX4-SOX2_initial_binding_scoresSOX4.txt'
-    best_path = './../data/SOX4/SOX4_best_binding_scores.txt'
-    # best_path = './../data/SOX4-SOX2_maxiters_100/SOX4-SOX2_best_binding_scoresSOX4.txt'
+    init_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}-targetprotein_initial_binding_scores.txt'
+    best_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}-targetprotein_best_binding_scores.txt'
 
     seqs_init = read_score(init_path)
     seqs_final = read_score(best_path)
@@ -102,11 +110,8 @@ if __name__ == "__main__":
 
     axs[0,1].set_xlabel("")   
 
-    # init_path = './../data/scripts/SOX4-SOX2/SOX4-SOX2_initial_binding_scoresSOX2.txt'
-    init_path = './../data/SOX2/bind_scores_list_beginning.txt'
-    # best_path = './../data/scripts/SOX4-SOX2/SOX4-SOX2_best_binding_scoresSOX2.txt'
-    best_path = './../data/SOX2/bind_scores_list_end_iter800.txt'
-
+    init_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}-targetprotein_initial_binding_scores.txt'
+    best_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}-targetprotein_best_binding_scores.txt'
     seqs_init = read_score(init_path)
     seqs_final = read_score(best_path)
 
@@ -134,13 +139,13 @@ if __name__ == "__main__":
     sns.distplot(a=init_score,ax=axs[1,0])
     sns.distplot(a=best_score,ax=axs[1,0])
 
-    axs[1,0].set_ylabel("SOX2 Binding Score");
+    axs[1,0].set_ylabel("SOX2 Binding Score")
     axs[1,0].set_xlabel("")
     
 
     sns.boxplot(x=x,y=y,ax=axs[1,1])
 
-    axs[1,1].set_ylabel("SOX2 Binding Score");
+    axs[1,1].set_ylabel("SOX2 Binding Score")
     axs[1,1].set_xlabel("")
 
     axs[1,0].set_title('C',weight='bold',fontsize=90)

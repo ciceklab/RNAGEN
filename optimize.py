@@ -1,25 +1,37 @@
 import numpy as np
-import pandas as pd
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import sys
 import os
 import pdb
-import keras
-from keras import backend as K
+import tensorflow.keras as keras
+from tensorflow.keras import backend as K
 from tqdm import tqdm
-from keras.preprocessing.sequence import pad_sequences
-from keras.engine.topology import Layer
-from keras.layers import Concatenate, LeakyReLU, SpatialDropout1D
-from keras.layers.convolutional import Conv1D
-from keras.layers.core import Dropout
-from keras.layers.normalization import BatchNormalization
-from keras.layers.pooling import MaxPooling1D
-from keras.regularizers import l2
-from keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.layers import Concatenate, LeakyReLU, SpatialDropout1D
+from tensorflow.keras.layers import Conv1D, Dropout, BatchNormalization, MaxPooling1D
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 from scipy.special import softmax
-# from rnasamba.core.model import get_rnasamba_model
-# from rnasamba.core.inputs import RNAsambaInput
+import pandas as pd
+import argparse 
+
+tf.disable_eager_execution()
+
+K.clear_session()
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-i', type=str, required=False, default='./input/opt_input.csv')
+parser.add_argument('-n', type=int, required=False, default=3000)
+parser.add_argument('-t', type=str, required=False, default='./data/model/trained_gan.ckpt.meta')
+parser.add_argument('-lr', type=int, required=False ,default=1)
+parser.add_argument('-gpu', type=str, required=False ,default='-1')
+
+args = parser.parse_args()
+
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 def convert_model(file_name, input_len, window_size=0):
     
@@ -44,8 +56,7 @@ def convert_model(file_name, input_len, window_size=0):
                         num_detectors*(2 if has_avg_pooling else 1),
                         (1 if num_hidden==0 else num_hidden))
     if (has_avg_pooling > 0):
-        #in the orignal deepbind model, these weights are interleaved.
-        #what a nightmare.
+
         weights1 = weights1.reshape((num_detectors,2,-1))
         new_weights1 = np.zeros((2*num_detectors, weights1.shape[-1]))
         new_weights1[:num_detectors, :] = weights1[:,0,:]
@@ -54,7 +65,6 @@ def convert_model(file_name, input_len, window_size=0):
     biases1 = np.array([float(x) for x in data[9].split(" = ")[1].split(",")]).reshape(
                         (1 if num_hidden==0 else num_hidden))
     if (num_hidden > 0):
-        #print("Model has a hidden layer")
         weights2 = np.array([float(x) for x in data[10].split(" = ")[1].split(",")]).reshape(
                         num_hidden,1)
         biases2 = np.array([float(x) for x in data[11].split(" = ")[1].split(",")]).reshape(
@@ -70,8 +80,7 @@ def convert_model(file_name, input_len, window_size=0):
                 name=None,
                 constant_values=0.25)
 
-    
-    input_tensor = keras.layers.Input(shape=(None,4))
+    input_tensor = keras.layers.Input(shape=(input_len,4))
     padding_out_fwd = keras.layers.Lambda(seq_padding)(input_tensor)
     conv_layer = keras.layers.Conv1D(filters=num_detectors,
                                   kernel_size=detector_len,
@@ -221,86 +230,6 @@ def get_kmer(seq):
 def countoverlap(seq,kmer):
 	return len([1 for i in range(len(seq)) if seq.startswith(kmer,i)])
 
-'''
-This script is a major component of the project RNAGEN by CicekLab.
-This script needs: i) Trained RNA sequences generator (WGAN), ii) DeepBind model weights for the desired protein. 
-The script basically optimizes generated RNA sequences to have maximum binding scores to desired proteins. 
-'''
-
-trained_gan_path = "/home/sina/ml/RNAGEN/scripts/logs/gan_test/2020.08.17-14h04m49s_neo/checkpoints/checkpoint_199950/trained_gan.ckpt.meta"
-
-''' SOX Family Optimization'''
-deepbind_model_path ="/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00640.003.txt" #sox15 - d = 40.81 
-deepbind_model_path_2 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00639.003.txt" #sox14 - d = 44.86
-deepbind_model_path_3 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00647.002.txt" #sox7 - d = 54.14
-deepbind_model_path_4 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00644.003.txt" #sox21 - d = 55.85
-deepbind_model_path_5 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00645.006.txt" # SOX2 target protein 
-
-''' SRS Family Optimization'''
-deepbind_model_path ="/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00153.001.txt" #SRSF2 - d = 43.72 
-deepbind_model_path_2 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00154.001.txt" #SRSF7 - d = 48.67
-deepbind_model_path_3 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00169.001.txt" #SRSF1 - d = 52.88
-deepbind_model_path_4 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00148.002.txt" #SRSF9 - d = 71.86
-deepbind_model_path_5 = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00162.002.txt" # SRSF10 target protein 
-
-deepbind_model_eval = "/home/sina/ml/RNAGEN/deepbind_models/deepbind/db/params/D00645.006.txt" # SOX2 target protein 
-
-dist15 = 43.72
-dist14 = 48.67
-dist7 = 52.88
-dist21 = 71.86
-
-weights = softmax([dist15,dist14,dist7])
-
-protein_name = "SOX4-SOX2"
-
-rna_vocab = {"A":0,
-             "C":1,
-             "G":2,
-             "U":3,
-             "*":4}
-
-rev_rna_vocab = {v:k for k,v in rna_vocab.items()}
-
-'''
-load the trained WGAN model
-'''
-
-#session = tf.Session()
-session = K.get_session()
-gen_handler = tf.train.import_meta_graph(trained_gan_path, import_scope="generator")
-gen_handler.restore(session, trained_gan_path[:-5])
-
-latents = tf.get_collection('latents')[0]
-gen_output = tf.get_collection('outputs')[0]
-batch_size, latent_dim = session.run(tf.shape(latents))
-latent_vars = [c for c in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if 'generator/latent_vars' in c.name][0]
-
-
-'''
-TO DO: Get DeepBind Model Ready !!!
-'''
-model = convert_model(file_name = deepbind_model_path, input_len=32) # sox15
-model2 = convert_model(file_name = deepbind_model_path_2, input_len=32) # sox14
-model3 = convert_model(file_name = deepbind_model_path_3, input_len=32) # sox7
-model4 = convert_model(file_name = deepbind_model_path_4, input_len=32) # sox21
-model_target = convert_model(file_name = deepbind_model_path_5, input_len=32) # sox2 - target protein
-model_test = convert_model(file_name = deepbind_model_eval, input_len=32)
-
-onehot_sequences = onehot_encode_sequences(
-        ['AGGUAAUAAUUUGCAUGAAAUAACUUGGAGAGGAUAGC',
-         'AGACAGAGCUUCCAUCAGCGCUAGCAGCAGAGACCAUU',
-         'GAGGTTACGCGGCAAGATAA',
-         'TACCACTAGGGGGCGCCACC'])
-#res = model.predict(np.array(onehot_sequences[0:2])[:,:,:])
-
-
-
-'''
-Random noise for initial latent space of generator. Drawn from standard normal distribution.
-''' 
-start_noise = np.random.normal(size=[batch_size, latent_dim])
-session.run(tf.assign(latent_vars, start_noise))
 
 def probs_to_chars(genseqs):
     argmax = np.argmax(genseqs,2)
@@ -318,181 +247,243 @@ def one_hot_encode(seq, SEQ_LEN=32):
         return np.vstack([np.eye(4)[seq2] , extra])
     return np.eye(4)[seq2]
 
-
-
 '''
-WEIGHT TUNER NETWORK definiton. 
+This script is a major component of the project RNAGEN by CicekLab.
+This script needs: i) Trained RNA sequences generator (WGAN), ii) DeepBind model weights for the desired protein. 
+The script basically optimizes generated RNA sequences to have maximum binding scores to desired proteins. 
 '''
 
-wtn_inps = keras.layers.Input(shape=(3,))
-batchs = K.shape(wtn_inps)[0]
 
-constants = np.asarray([44.86, 54.14, 55.85]).reshape((1,-1))
-k_consts = K.variable(constants)
-k_consts = K.tile(k_consts, (batchs,1))
-fixed_inp = keras.layers.Input(tensor = k_consts)
+if __name__ == '__main__':
+    
+    input_file = args.i
 
-wtn_concated_inps = keras.layers.concatenate([fixed_inp, wtn_inps])
-wtn_hidden1 = keras.layers.Dense(6, activation='relu')(wtn_concated_inps)
-wtn_hidden2 = keras.layers.Dense(12, activation='relu')(wtn_hidden1)
-wtn_out = keras.layers.Dense(3, activation='softmax')(wtn_hidden2)
-wtn_model = keras.models.Model(inputs = [wtn_inps, fixed_inp], outputs = wtn_out)
+    df = pd.read_csv(input_file)
 
-'''
-#################
-'''
-# pred_input = model.input
-# bind_scores = model.predict(ohe_genseqs)
-# cost = tf.reduce_mean(-bind_scores)
+    protein_names = df['protein_name'].to_numpy()
+    paths = df['model_id'].to_numpy()
+    distances = df['dist'].to_numpy()
 
-outputTensor = model.output # sox15
-outputTensor2 = model2.output # sox14
-outputTensor3 = model3.output  # sox7
-outputTensor4 = model4.output  # sox21
-outputTensor_target = model_target.output  # sox2 - target protein
-outputTensor_test = model_test.output
+    protein_name = protein_names[0]
 
-cost = tf.reduce_mean(-outputTensor) # validation protein, cost for WTN weights
-cost2 = tf.reduce_mean(-outputTensor2)
-cost3 = tf.reduce_mean(-outputTensor3)
-cost4 = tf.reduce_mean(-outputTensor4)
-cost_target = tf.reduce_mean(-outputTensor_target)
-cost_test = tf.reduce_mean(-outputTensor_test)
+    trained_gan_path = args.t
 
-listOfVariableTensors = model.inputs[0]
-listOfVariableTensors2 = model2.inputs[0]
-listOfVariableTensors3 = model3.inputs[0]
-listOfVariableTensors4 = model4.inputs[0]
-listOfVariableTensors_target = model_target.inputs[0]
-listOfVariableTensors_test = model_test.inputs[0]
+    base_deepbind_path = './deepbind_models/params/'
 
-listOfVariableTensors_WTN = wtn_model.trainable_weights[0]
-gradients_WTN = K.gradients(cost, listOfVariableTensors_WTN)
+    ''' SOX Family Optimization'''
+    deepbind_model_path = base_deepbind_path + paths[1] + '.txt'
+    deepbind_model_path_2 = base_deepbind_path + paths[2] + '.txt'
+    deepbind_model_path_3 = base_deepbind_path + paths[3] + '.txt'
 
-gradients_cost_seq = K.gradients(cost, listOfVariableTensors)[0]
-gradients_cost_seq2 = K.gradients(cost2, listOfVariableTensors2)[0]
-gradients_cost_seq3 = K.gradients(cost3, listOfVariableTensors3)[0]
-gradients_cost_seq4 = K.gradients(cost4, listOfVariableTensors4)[0]
-gradients_cost_seq_target = K.gradients(cost_target, listOfVariableTensors_target)[0]
+    deepbind_model_target = base_deepbind_path + paths[0] + '.txt'
 
-gradients_cost_seq_expanded = tf.pad(gradients_cost_seq, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
-gradients_cost_seq_expanded2 = tf.pad(gradients_cost_seq2, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
-gradients_cost_seq_expanded3 = tf.pad(gradients_cost_seq3, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
-gradients_cost_seq_expanded4 = tf.pad(gradients_cost_seq4, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
-gradients_cost_seq_expanded_target = tf.pad(gradients_cost_seq_target, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
+    deepbind_model_eval = base_deepbind_path + paths[4] + '.txt'
 
-grad_seq_latent = tf.gradients(ys=gen_output, xs=latents)[0]
-grad_seq_latent2 = tf.gradients(ys=gen_output, xs=latents)[0]
-grad_seq_latent3 = tf.gradients(ys=gen_output, xs=latents)[0]
-grad_seq_latent4 = tf.gradients(ys=gen_output, xs=latents)[0]
-grad_seq_latent_target = tf.gradients(ys=gen_output, xs=latents)[0]
+    dist_protein_1 = float(distances[1])
+    dist_protein_2 = float(distances[2])
+    dist_protein_3 = float(distances[3])
 
-grad_cost_latent = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded)[0]
-grad_cost_latent2 = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded2)[0]
-grad_cost_latent3 = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded3)[0]
-grad_cost_latent4 = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded4)[0]
-grad_cost_latent_target = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded_target)[0]
+    dists = [dist_protein_1,dist_protein_2,dist_protein_3]
 
-noise = tf.random_normal(shape=[batch_size, latent_dim], stddev=1e-5)
-global_step = tf.Variable(1e-1, trainable=False)
-session.run(global_step.initializer)
-tf.add_to_collection('global_step', global_step)
-optimizer = tf.train.AdamOptimizer(learning_rate=global_step)
+    weights = softmax(dists)
 
-# cost2 = session.run(cost,feed_dict={model.input:ohe_genseqs})
-# preds = session.run(outputTensor,feed_dict={model.input:ohe_genseqs})
+   
 
-design_op = optimizer.apply_gradients([(grad_cost_latent + noise + grad_cost_latent2, latent_vars)])
-adam_initializers = [var.initializer for var in tf.global_variables() if 'Adam' in var.name or 'beta' in var.name]
-session.run(adam_initializers)
-tf.add_to_collection('design_op', design_op)
-s = session.run(tf.shape(latents))
-#update_pred_input = tf.assign(model.input, )
-#session.run()
+    rna_vocab = {"A":0,
+                "C":1,
+                "G":2,
+                "U":3,
+                "*":4}
+
+    rev_rna_vocab = {v:k for k,v in rna_vocab.items()}
+
+    '''
+    load the trained WGAN model
+    '''
+
+    session = tf.keras.backend.get_session()
+    gen_handler = tf.train.import_meta_graph(trained_gan_path, import_scope="generator")
+    gen_handler.restore(session, trained_gan_path[:-5])
+
+    latents = tf.get_collection('latents')[0]
+    gen_output = tf.get_collection('outputs')[0]
+    batch_size, latent_dim = session.run(tf.shape(latents))
+    latent_vars = [c for c in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if 'generator/latent_vars' in c.name][0]
 
 
-#grad_cost_latent = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq)[0]
+    '''
+    Get DeepBind Model Ready !!!
+    '''
+    model = convert_model(file_name = deepbind_model_path, input_len=32) # sox15
+    model2 = convert_model(file_name = deepbind_model_path_2, input_len=32) # sox14
+    model3 = convert_model(file_name = deepbind_model_path_3, input_len=32) # sox7
+    model_target = convert_model(file_name = deepbind_model_target, input_len=32) # sox2 - target protein
+    model_test = convert_model(file_name = deepbind_model_eval, input_len=32)
 
-'''
-Optimization takes place here.
-'''
-bind_scores_list = []
-bind_scores_list2 = []
-bind_scores_list_target = []
-bind_scores_means = []
-bind_scores_means2 = []
-bind_scores_means_total = []
-bind_scores_means_target = []
-sequences_list = []
-max_iters=3000
-for opt_iter in tqdm(range(max_iters)):
-    generated_sequences = session.run(gen_output)
-    generated_sequences = probs_to_chars(generated_sequences)
+    '''
+    Random noise for initial latent space of generator. Drawn from standard normal distribution.
+    ''' 
+    start_noise = np.random.normal(size=[batch_size, latent_dim])
+    session.run(tf.assign(latent_vars, start_noise))
+
+
+
+
+
+
+    
+
+    '''
+    WEIGHT TUNER NETWORK definiton. 
+    '''
+
+    wtn_inps = keras.layers.Input(shape=(3,))
+    batchs = K.shape(wtn_inps)[0]
+
+    constants = np.asarray(dists).reshape((1,-1))
+    k_consts = K.variable(constants)
+    k_consts = K.tile(k_consts, (batchs,1))
+    fixed_inp = keras.layers.Input(tensor = k_consts)
+
+    wtn_concated_inps = keras.layers.concatenate([fixed_inp, wtn_inps])
+    wtn_hidden1 = keras.layers.Dense(6, activation='relu')(wtn_concated_inps)
+    wtn_hidden2 = keras.layers.Dense(12, activation='relu')(wtn_hidden1)
+    wtn_out = keras.layers.Dense(3, activation='softmax')(wtn_hidden2)
+    wtn_model = keras.models.Model(inputs = [wtn_inps, fixed_inp], outputs = wtn_out)
+
+    '''
+    ################# Variables Defined:
+    '''
+
+    outputTensor = model.output
+    outputTensor2 = model2.output
+    outputTensor3 = model3.output
+    outputTensor_target = model_target.output
+    outputTensor_test = model_test.output
+
+    cost = tf.reduce_mean(-outputTensor)
+    cost2 = tf.reduce_mean(-outputTensor2)
+    cost3 = tf.reduce_mean(-outputTensor3)
+    cost_target = tf.reduce_mean(-outputTensor_target)
+    cost_test = tf.reduce_mean(-outputTensor_test)
+
+    listOfVariableTensors = model.inputs[0]
+    listOfVariableTensors2 = model2.inputs[0]
+    listOfVariableTensors3 = model3.inputs[0]
+    listOfVariableTensors_target = model_target.inputs[0]
+    listOfVariableTensors_test = model_test.inputs[0]
+
+
+    gradients_cost_seq = K.gradients(cost, listOfVariableTensors)[0]
+    gradients_cost_seq2 = K.gradients(cost2, listOfVariableTensors2)[0]
+    gradients_cost_seq3 = K.gradients(cost3, listOfVariableTensors3)[0]
+    gradients_cost_seq_target = K.gradients(cost_target, listOfVariableTensors_target)[0]
+
+    gradients_cost_seq_expanded = tf.pad(gradients_cost_seq, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
+    gradients_cost_seq_expanded2 = tf.pad(gradients_cost_seq2, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
+    gradients_cost_seq_expanded3 = tf.pad(gradients_cost_seq3, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
+    gradients_cost_seq_expanded_target = tf.pad(gradients_cost_seq_target, [[0,0], [0,0], [0,1]], 'CONSTANT', constant_values=0)
+
+
+    grad_cost_latent = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded)[0]
+    grad_cost_latent2 = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded2)[0]
+    grad_cost_latent3 = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded3)[0]
+    grad_cost_latent_target = tf.gradients(ys=gen_output, xs=latents, grad_ys=gradients_cost_seq_expanded_target)[0]
+
+    noise = tf.random_normal(shape=[batch_size, latent_dim], stddev=1e-5)
+    global_step = tf.Variable(args.lr * 1e-1, trainable=False)
+    session.run(global_step.initializer)
+    tf.add_to_collection('global_step', global_step)
+    optimizer = tf.train.AdamOptimizer(learning_rate=global_step)
+
+    design_op = optimizer.apply_gradients([(grad_cost_latent + noise + grad_cost_latent2, latent_vars)])
+    adam_initializers = [var.initializer for var in tf.global_variables() if 'Adam' in var.name or 'beta' in var.name]
+    session.run(adam_initializers)
+    tf.add_to_collection('design_op', design_op)
+    s = session.run(tf.shape(latents))
+
+
+    '''
+    Optimization takes place here.
+    '''
+    bind_scores_list = []
+    bind_scores_list2 = []
+    bind_scores_list_target = []
+    bind_scores_means = []
+    bind_scores_means2 = []
+    bind_scores_means_total = []
+    bind_scores_means_target = []
+    sequences_list = []
+    max_iters=args.n
+    for opt_iter in tqdm(range(max_iters)):
+        generated_sequences = session.run(gen_output)
+        generated_sequences = probs_to_chars(generated_sequences)
+        ohe_genseqs = np.array([one_hot_encode(x) for x in generated_sequences])
+        bind_scores = model.predict(ohe_genseqs)
+        bind_scores2 = model2.predict(ohe_genseqs)
+        bind_scores3 = model3.predict(ohe_genseqs)
+
+        bind_scores_target = model_target.predict(ohe_genseqs)
+
+        wtn_inp_scores = np.stack((bind_scores, bind_scores2, bind_scores3), 1) 
+        wtn_out_weights = wtn_model.predict(wtn_inp_scores)
+
+        sequences_list.append(generated_sequences)
+
+        evaluated_gradients_cost_seq = session.run(gradients_cost_seq,feed_dict={model.input:ohe_genseqs})
+        evaluated_gradients_cost_seq2 = session.run(gradients_cost_seq2,feed_dict={model2.input:ohe_genseqs})
+        evaluated_gradients_cost_seq3 = session.run(gradients_cost_seq3,feed_dict={model3.input:ohe_genseqs})
+        evaluated_gradients_cost_seq_target = session.run(gradients_cost_seq_target,feed_dict={model_target.input:ohe_genseqs})
+
+        evaluated_gradients_cost_seq_expanded = session.run(gradients_cost_seq_expanded, feed_dict={model.input:ohe_genseqs})
+        evaluated_gradients_cost_seq_expanded2 = session.run(gradients_cost_seq_expanded2, feed_dict={model2.input:ohe_genseqs})
+        evaluated_gradients_cost_seq_expanded3 = session.run(gradients_cost_seq_expanded3, feed_dict={model3.input:ohe_genseqs})
+        evaluated_gradients_cost_seq_expanded_target = session.run(gradients_cost_seq_expanded_target, feed_dict={model_target.input:ohe_genseqs})
+
+        evaluated_gradients_cost_latent = session.run(grad_cost_latent, feed_dict={model.input:ohe_genseqs}) # sox 15
+        evaluated_gradients_cost_latent2 = session.run(grad_cost_latent2, feed_dict={model2.input:ohe_genseqs}) #  sox 14
+        evaluated_gradients_cost_latent3 = session.run(grad_cost_latent3, feed_dict={model3.input:ohe_genseqs}) # sox 7
+        evaluated_gradients_cost_latent_target = session.run(grad_cost_latent_target, feed_dict={model_target.input:ohe_genseqs}) # sox2
+        
+        desop = (evaluated_gradients_cost_latent * weights[0])
+        desop1 = (evaluated_gradients_cost_latent2 * weights[1])
+        desop2 = (evaluated_gradients_cost_latent3 * weights[2])
+
+        design_op = optimizer.apply_gradients([(desop + desop1 + desop2 + noise, latent_vars)])
+        session.run(design_op)
+
+        bind_scores_list.append(bind_scores)
+        bind_scores_list2.append(bind_scores2)
+        bind_scores_list_target.append(bind_scores_target)
+        
+        bind_scores_means.append(np.mean(bind_scores))
+        bind_scores_means2.append(np.mean(bind_scores2))
+        bind_scores_means_target.append(np.mean(bind_scores_target))
+        bind_scores_means_total.append(np.mean(bind_scores + bind_scores2))
+
+
     ohe_genseqs = np.array([one_hot_encode(x) for x in generated_sequences])
-    bind_scores = model.predict(ohe_genseqs) # sox15 - validation protein - closest
-    bind_scores2 = model2.predict(ohe_genseqs) # sox14
-    bind_scores3 = model3.predict(ohe_genseqs) # sox7
-    bind_scores4 = model4.predict(ohe_genseqs) # sox21
-    bind_scores_target = model_target.predict(ohe_genseqs) # sox2 - target protein
+    bind_scores_test = model_test.predict(ohe_genseqs) # sox15 - validation protein - closest
 
-    wtn_inp_scores = np.stack((bind_scores2, bind_scores3, bind_scores4), 1) 
-    wtn_out_weights = wtn_model.predict(wtn_inp_scores)
-
-    sequences_list.append(generated_sequences)
-
-    evaluated_gradients_cost_seq = session.run(gradients_cost_seq,feed_dict={model.input:ohe_genseqs})
-    evaluated_gradients_cost_seq2 = session.run(gradients_cost_seq2,feed_dict={model2.input:ohe_genseqs})
-    evaluated_gradients_cost_seq3 = session.run(gradients_cost_seq3,feed_dict={model3.input:ohe_genseqs})
-    evaluated_gradients_cost_seq4 = session.run(gradients_cost_seq4,feed_dict={model4.input:ohe_genseqs})
-    evaluated_gradients_cost_seq_target = session.run(gradients_cost_seq_target,feed_dict={model_target.input:ohe_genseqs})
-
-    evaluated_gradients_cost_seq_expanded = session.run(gradients_cost_seq_expanded, feed_dict={model.input:ohe_genseqs})
-    evaluated_gradients_cost_seq_expanded2 = session.run(gradients_cost_seq_expanded2, feed_dict={model2.input:ohe_genseqs})
-    evaluated_gradients_cost_seq_expanded3 = session.run(gradients_cost_seq_expanded3, feed_dict={model3.input:ohe_genseqs})
-    evaluated_gradients_cost_seq_expanded4 = session.run(gradients_cost_seq_expanded4, feed_dict={model4.input:ohe_genseqs})
-    evaluated_gradients_cost_seq_expanded_target = session.run(gradients_cost_seq_expanded_target, feed_dict={model_target.input:ohe_genseqs})
-
-    evaluated_gradients_cost_latent = session.run(grad_cost_latent, feed_dict={model.input:ohe_genseqs}) # sox 15
-    evaluated_gradients_cost_latent2 = session.run(grad_cost_latent2, feed_dict={model2.input:ohe_genseqs}) #  sox 14
-    evaluated_gradients_cost_latent3 = session.run(grad_cost_latent3, feed_dict={model3.input:ohe_genseqs}) # sox 7
-    evaluated_gradients_cost_latent4 = session.run(grad_cost_latent4, feed_dict={model4.input:ohe_genseqs}) # sox 21
-    evaluated_gradients_cost_latent_target = session.run(grad_cost_latent_target, feed_dict={model_target.input:ohe_genseqs}) # sox2
-    
-    desop = (evaluated_gradients_cost_latent * weights[0]) # sox15
-    desop1 = (evaluated_gradients_cost_latent2 * weights[1]) # sox14
-    desop2 = (evaluated_gradients_cost_latent3 * weights[2]) # sox7
-    #desop3 = (evaluated_gradients_cost_latent4) # sox21
-
-    #design_op = optimizer.apply_gradients([(evaluated_gradients_cost_latent + noise + evaluated_gradients_cost_latent2, latent_vars)])
-    design_op = optimizer.apply_gradients([(desop + desop1 + desop2 + noise, latent_vars)])
-    session.run(design_op)
-
-    bind_scores_list.append(bind_scores)
-    bind_scores_list2.append(bind_scores2)
-    bind_scores_list_target.append(bind_scores_target)
-    
-    bind_scores_means.append(np.mean(bind_scores))
-    bind_scores_means2.append(np.mean(bind_scores2))
-    bind_scores_means_target.append(np.mean(bind_scores_target))
-    bind_scores_means_total.append(np.mean(bind_scores + bind_scores2))
+    dirname='./output/'+protein_name+"_inv_distance_softmax_method"+"_maxiters_"+str(max_iters)+"/"
+    os.mkdir(dirname)
+    with open(dirname+protein_name+'_best_binding_sequences.txt', 'w') as f:
+        for item in sequences_list[np.argmax(bind_scores_means_total)]:
+            f.write("%s/n" % item)
+    with open(dirname+protein_name+'_initial_sequences.txt', 'w') as f:
+        for item in sequences_list[0]:
+            f.write("%s/n" % item)
 
 
-ohe_genseqs = np.array([one_hot_encode(x) for x in generated_sequences])
-bind_scores_test = model_test.predict(ohe_genseqs) # sox15 - validation protein - closest
+    np.savetxt(dirname+"targetprotein_initial_binding_scores"+".txt", bind_scores_list_target[0])
+    np.savetxt(dirname+"targetprotein_test_binding_scores"+".txt", bind_scores_test)
+    np.savetxt(dirname+"targetprotein_best_binding_scores"+".txt", bind_scores_list_target[np.argmax(bind_scores_means_target)])
 
-dirname="SRSF10_inv_distance_softmax_method"+"_maxiters_"+str(max_iters)+"/"
-os.mkdir(dirname)
-with open(dirname+protein_name+'_best_binding_sequences.txt', 'w') as f:
-    for item in sequences_list[np.argmax(bind_scores_means_total)]:
-        f.write("%s/n" % item)
-with open(dirname+protein_name+'_initial_sequences.txt', 'w') as f:
-    for item in sequences_list[0]:
-        f.write("%s/n" % item)
+    prebind = bind_scores_list_target[0]
+    postbind = bind_scores_list_target[np.argmax(bind_scores_means_target)]
 
-
-np.savetxt(dirname+"targetprotein_initial_binding_scores"+".txt", bind_scores_list_target[0])
-np.savetxt(dirname+"targetprotein_test_binding_scores"+".txt", bind_scores_test)
-np.savetxt(dirname+"targetprotein_best_binding_scores"+".txt", bind_scores_list_target[np.argmax(bind_scores_means_target)])
-pdb.set_trace()
+    sortinds = np.flip(postbind.argsort())
+    prebind = prebind[sortinds]
+    postbind = postbind[sortinds]
 
 

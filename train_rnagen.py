@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
 import pdb
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import sys
-sys.path.append('/home/furkan/RNAGEN/')
 import lib
 import socket
 import datetime
 import os
+import argparse
 '''
 This script is a part of project RNAGEN (piRNA's). The script is responsible of training of the generator 
 which learns to generate realistic piRNA's for homo-sapiens. This script is an essential part of the project since
@@ -25,6 +25,18 @@ CicekLab 2023, Furkan Ozden
 '''
 Data loading and pre-processing.
 '''
+tf.disable_eager_execution()
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-i', type=str, required=False, default='./data/DASHR2_GEO_hg38_sequenceTable_export.csv')
+parser.add_argument('-n', type=int, required=False, default=200000)
+parser.add_argument('-lr', type=int, required=False ,default=4)
+parser.add_argument('-gpu', type=str, required=False ,default='-1')
+
+args = parser.parse_args()
+
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 def log(samples_dir=False):
     stamp = datetime.date.strftime(datetime.datetime.now(), "%Y.%m.%d-%Hh%Mm%Ss") + "_{}".format(socket.gethostname())
@@ -34,7 +46,8 @@ def log(samples_dir=False):
     log_dir = "{}:{}".format(socket.gethostname(), full_logdir)
     return full_logdir, 0
 
-data_path = "/home/furkan/RNAGEN/DASHR2_GEO_piRNA_hg38_data/DASHR2_GEO_hg38_sequenceTable_export.csv"
+""" Read the input data """
+data_path = args.i
 data = pd.read_csv(data_path)
 piRNAdf = data.loc[data['rnaClass'] == 'piRNA']
 piRNAarr = piRNAdf.values
@@ -68,12 +81,13 @@ def one_hot_encode(seq, SEQ_LEN=32):
 ohe_sequences = np.asarray([one_hot_encode(x) for x in sequences])
 
 BATCH_SIZE = 64 # Batch size
-ITERS = 200000 # How many iterations to train for
+ITERS = args.n # How many iterations to train for
 SEQ_LEN = 32 # Sequence length in characters
 DIM = 25 # Model dimensionality.
 CRITIC_ITERS = 5 # How many critic iterations per generator iteration. 
 LAMBDA = 10 # Gradient penalty lambda hyperparameter.
 MAX_N_EXAMPLES = 10000000 # Max number of data examples to load.
+LR = np.exp(-args.lr) # The learning rate
 '''
 Set seed for reproducibility
 '''
@@ -137,8 +151,8 @@ grad_norms = tf.norm(grads, axis=[1,2]) # might need extra term for numerical st
 grad_penalty = lmbda * tf.reduce_mean((grad_norms - 1.) ** 2)
 disc_cost = disc_diff + grad_penalty
 
-gen_optimizer = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9, name='gen_optimizer') #Note: Adam optimizer requires fixed shape
-disc_optimizer = tf.train.AdamOptimizer(learning_rate=1e-4, beta1=0.5, beta2=0.9, name='disc_optimizer')
+gen_optimizer = tf.train.AdamOptimizer(learning_rate=LR, beta1=0.5, beta2=0.9, name='gen_optimizer') #Note: Adam optimizer requires fixed shape
+disc_optimizer = tf.train.AdamOptimizer(learning_rate=LR, beta1=0.5, beta2=0.9, name='disc_optimizer')
 gen_train_op = gen_optimizer.minimize(gen_cost, var_list=gen_vars)
 disc_train_op = disc_optimizer.minimize(disc_cost, var_list=disc_vars)
 tf.add_to_collection('latents', latent_vars)
@@ -184,7 +198,7 @@ saver = tf.train.Saver()
 
 print("Training GAN")
 print("================================================")
-train_iters = 200000
+train_iters = ITERS
 disc_iters = 5
 checkpoint_iters = 50
 checkpoint = None
@@ -236,4 +250,3 @@ for idx in range(train_iters):
     os.makedirs(ckpt_dir, exist_ok=True)
     saver.save(session, os.path.join(ckpt_dir, "trained_gan.ckpt"))
 
-pdb.set_trace()

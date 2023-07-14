@@ -1,0 +1,6 @@
+model_checkpoint_path: "trained_gan.ckpt"
+all_model_checkpoint_paths: "../checkpoint_199750/trained_gan.ckpt"
+all_model_checkpoint_paths: "../checkpoint_199800/trained_gan.ckpt"
+all_model_checkpoint_paths: "../checkpoint_199850/trained_gan.ckpt"
+all_model_checkpoint_paths: "../checkpoint_199900/trained_gan.ckpt"
+all_model_checkpoint_paths: "trained_gan.ckpt"

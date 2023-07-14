@@ -8,7 +8,8 @@ dna_vocab = {"A":0,
              "C":1,
              "G":2,
              "T":3,
-             "*":4} # catch-all auxiliary token
+             "*":4}
+
 rna_vocab = {"A":0,
              "C":1,
              "G":2,

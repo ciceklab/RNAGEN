@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import random
-from scipy.stats import ks_2samp,kstest,ttest_ind,wilcoxon,bootstrap, mannwhitneyu, pearsonr
+from scipy.stats import norm,ks_2samp,kstest,ttest_ind,wilcoxon,bootstrap, mannwhitneyu, pearsonr
 from polyleven import levenshtein
 import seaborn as sns
 random.seed(1337)
@@ -14,16 +14,14 @@ np.random.seed(1337)
 import pandas as pd
 pd.options.mode.chained_assignment = None 
 import RNA
-
-
-
+from cliffs_delta import cliffs_delta
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 MAX_LEN = 32
 BATCH_SIZE = 2048
-gen_path = './data/generated.txt'
-real_path = './data/realsequences_pirna.fa'
+gen_path = './generated.txt'
+real_path = './piRNAs.fa'
 
 params = {'legend.fontsize': 90,
         'figure.figsize': (64, 24),
@@ -237,7 +235,6 @@ if __name__ == "__main__":
 
 
     genpreds = []
-    print(np.average([len(seq) for seq in gens]))
     gen_gc = get_gc_content_many(gens)
 
     for i in range(len(gens)):
@@ -260,9 +257,8 @@ if __name__ == "__main__":
         randpreds.append(mfe)
 
 
-    data_path = './data/realsequences_pirna.fa'
 
-    reals = read_reals(data_path)
+    reals = read_reals(real_path)
 
     indices = []
 
@@ -279,7 +275,6 @@ if __name__ == "__main__":
 
     realpreds = []
     real_gc = get_gc_content_many(chosen)
-    print(np.average([len(seq) for seq in chosen]))
 
     for i in range(len(chosen)):
         (ss, mfe) = RNA.fold(chosen[i])
@@ -299,25 +294,25 @@ if __name__ == "__main__":
 
     print("Calculating Levenshtein distances. This may take a while ...")
 
-    if os.path.exists('./data/rand_ham_dists.npy'):
-        dist_rand = np.load('./data/rand_ham_dists.npy', allow_pickle=True)
+    if os.path.exists('./rand_ham_dist.npy'):
+        dist_rand = np.load('./rand_ham_dist.npy', allow_pickle=True)
     else:
         dist_rand = hamming_dist(rand,real)
-        with open('./data/rand_ham_dists.npy', 'wb') as f:
+        with open('./rand_ham_dist.npy', 'wb') as f:
             np.save(f,dist_rand)
 
-    if os.path.exists('./data/real_ham_dists.npy'):
-        dist_real = np.load('./data/real_ham_dists.npy', allow_pickle=True)
+    if os.path.exists('./real_ham_dist.npy'):
+        dist_real = np.load('./real_ham_dist.npy', allow_pickle=True)
     else:
         dist_real = hamming_dist(real,real)
-        with open('./data/real_ham_dists.npy', 'wb') as f:
+        with open('./real_ham_dist.npy', 'wb') as f:
             np.save(f,dist_real)        
 
-    if os.path.exists('./data/gen_ham_dists.npy'):
-        dist_gen = np.load('./data/gen_ham_dists.npy', allow_pickle=True)
+    if os.path.exists('./gen_ham_dist_.npy'):
+        dist_gen = np.load('./gen_ham_dist_.npy', allow_pickle=True)
     else:
         dist_gen = hamming_dist(gens, real)
-        with open('./data/gen_ham_dists.npy', 'wb') as f:
+        with open('./gen_ham_dist_.npy', 'wb') as f:
             np.save(f,dist_gen)
 
     fig, axs = plt.subplots(1,2)
@@ -333,11 +328,74 @@ if __name__ == "__main__":
     dist_t_rand = mannwhitneyu(dist_rand, dist_real)
     dist_t_gen = mannwhitneyu(dist_gen, dist_real)
 
+
+    n1 = len(dist_rand)
+    n2 = len(dist_real)
+
+    u1 = np.mean(dist_rand)
+    u2 = np.mean(dist_real)
+    
+    s1 = np.std(dist_rand)
+    s2 = np.std(dist_real)
+
+    s = np.sqrt(((n1 - 1) * np.power(s1,2) + (n2 - 1) * np.power(s2,2)) / (n1 + n2 - 2))
+
+    dist_rand_effect_size = (u1 - u2)/s
+    dist_rand_effect_size = cliffs_delta(dist_rand, dist_real)
+    ct1 = n1  #items in dataset 1
+    ct2 = n2  #items in dataset 2
+    ds1 = dist_rand
+    ds2 = dist_real
+    alpha = 0.05       #95% confidence interval
+    N = norm.ppf(1 - alpha/2) # percent point function - inverse of cdf
+
+    # The confidence interval for the difference between the two population
+    # medians is derived through these nxm differences.
+    diffs = sorted([i-j for i in ds1 for j in ds2])
+
+    # For an approximate 100(1-a)% confidence interval first calculate K:
+    k = int(round(ct1*ct2/2 - (N * (ct1*ct2*(ct1+ct2+1)/12)**0.5)))
+
+    # The Kth smallest to the Kth largest of the n x m differences 
+    # ct1 and ct2 should be > ~20
+    dist_rand_CI = (diffs[k], diffs[len(diffs)-k])
+
+    n1 = len(dist_gen)
+    n2 = len(dist_real)
+
+    u1 = np.mean(dist_gen)
+    u2 = np.mean(dist_real)
+    
+    s1 = np.std(dist_gen)
+    s2 = np.std(dist_real)
+
+    s = np.sqrt(((n1 - 1) * np.power(s1,2) + (n2 - 1) * np.power(s2,2)) / (n1 + n2 - 2))
+
+    dist_gen_effect_size = (u1 - u2)/s
+    dist_gen_effect_size = cliffs_delta(dist_gen, dist_real)
+    ct1 = n1  #items in dataset 1
+    ct2 = n2  #items in dataset 2
+    ds1 = dist_gen
+    ds2 = dist_real
+    alpha = 0.05       #95% confidence interval
+    N = norm.ppf(1 - alpha/2) # percent point function - inverse of cdf
+
+    # The confidence interval for the difference between the two population
+    # medians is derived through these nxm differences.
+    diffs = sorted([i-j for i in ds1 for j in ds2])
+
+    # For an approximate 100(1-a)% confidence interval first calculate K:
+    k = int(round(ct1*ct2/2 - (N * (ct1*ct2*(ct1+ct2+1)/12)**0.5)))
+
+    # The Kth smallest to the Kth largest of the n x m differences 
+    # ct1 and ct2 should be > ~20
+    dist_gen_CI = (diffs[k], diffs[len(diffs)-k])
+
     df = pd.DataFrame({'x':x,'y':y})
 
     sns.boxplot(x=df['x'],y=df['y'],ax=axs[0])
 
-    axs[0].set_ylabel("Min. Levenshtein Distance");
+    axs[0].set_ylabel("Min. Levenshtein Distance")
     axs[0].set_xlabel("")
 
     """ Finished """
@@ -355,6 +413,40 @@ if __name__ == "__main__":
     y = np.concatenate((gen_gc,real_gc))
     gc_t = mannwhitneyu(gen_gc, real_gc)
 
+    n1 = len(gen_gc)
+    n2 = len(real_gc)
+
+    u1 = np.mean(gen_gc)
+    u2 = np.mean(real_gc)
+    
+    s1 = np.std(gen_gc)
+    s2 = np.std(real_gc)
+
+    s = np.sqrt(((n1 - 1) * np.power(s1,2) + (n2 - 1) * np.power(s2,2)) / (n1 + n2 - 2))
+
+    gc_effect_size = (u1 - u2)/s
+    gc_effect_size = cliffs_delta(gen_gc, real_gc)
+
+
+
+    ct1 = n1  #items in dataset 1
+    ct2 = n2  #items in dataset 2
+    ds1 = gen_gc
+    ds2 = real_gc
+    alpha = 0.05       #95% confidence interval
+    N = norm.ppf(1 - alpha/2) # percent point function - inverse of cdf
+
+    # The confidence interval for the difference between the two population
+    # medians is derived through these nxm differences.
+    diffs = sorted([i-j for i in ds1 for j in ds2])
+
+    # For an approximate 100(1-a)% confidence interval first calculate K:
+    k = int(round(ct1*ct2/2 - (N * (ct1*ct2*(ct1+ct2+1)/12)**0.5)))
+
+    # The Kth smallest to the Kth largest of the n x m differences 
+    # ct1 and ct2 should be > ~20
+    gc_CI = (diffs[k], diffs[len(diffs)-k])
+
     df = pd.DataFrame({'x':x,'y':y})
 
     sns.violinplot(x=df['x'],y=df['y'],ax=axs[1])
@@ -367,7 +459,7 @@ if __name__ == "__main__":
 
     fig.tight_layout(pad=2)
 
-    plt.savefig('dist_gc.png')
+    plt.savefig('./../figures/dist_gc.png')
     plt.clf()
     fig, axs = plt.subplots(1,2)
 
@@ -404,7 +496,7 @@ if __name__ == "__main__":
         randpreds.append(mfe)
 
 
-    reals = read_reals(data_path)
+    reals = read_reals(real_path)
 
     indices = []
 
@@ -447,8 +539,72 @@ if __name__ == "__main__":
     mfe_t_rand = ttest_ind(randpreds, realpreds)
     mfe_t_gen = ttest_ind(genpreds, realpreds)
     
-    
+    n1 = len(randpreds)
+    n2 = len(realpreds)
 
+    u1 = np.mean(randpreds)
+    u2 = np.mean(realpreds)
+    
+    s1 = np.std(randpreds)
+    s2 = np.std(realpreds)
+
+    s = np.sqrt(((n1 - 1) * np.power(s1,2) + (n2 - 1) * np.power(s2,2)) / (n1 + n2 - 2))
+
+    mfe_rand_effect_size = (u1 - u2)/s
+    mfe_rand_effect_size = cliffs_delta(randpreds, realpreds)
+    ct1 = n1  #items in dataset 1
+    ct2 = n2  #items in dataset 2
+    ds1 = randpreds
+    ds2 = realpreds
+    alpha = 0.05       #95% confidence interval
+    N = norm.ppf(1 - alpha/2) # percent point function - inverse of cdf
+
+    # The confidence interval for the difference between the two population
+    # medians is derived through these nxm differences.
+    diffs = sorted([i-j for i in ds1 for j in ds2])
+
+    # For an approximate 100(1-a)% confidence interval first calculate K:
+    k = int(round(ct1*ct2/2 - (N * (ct1*ct2*(ct1+ct2+1)/12)**0.5)))
+
+    # The Kth smallest to the Kth largest of the n x m differences 
+    # ct1 and ct2 should be > ~20
+    mfe_rand_CI = (diffs[k], diffs[len(diffs)-k])
+
+    df = pd.DataFrame({'x':x,'y':y})
+
+    sns.violinplot(x=df['x'],y=df['y'],ax=axs[0])
+
+
+    n1 = len(genpreds)
+    n2 = len(realpreds)
+
+    u1 = np.mean(genpreds)
+    u2 = np.mean(realpreds)
+    
+    s1 = np.std(genpreds)
+    s2 = np.std(realpreds)
+
+    s = np.sqrt(((n1 - 1) * np.power(s1,2) + (n2 - 1) * np.power(s2,2)) / (n1 + n2 - 2))
+
+    mfe_gen_effect_size = (u1 - u2)/s
+    mfe_gen_effect_size = cliffs_delta(genpreds, realpreds)
+    ct1 = n1  #items in dataset 1
+    ct2 = n2  #items in dataset 2
+    ds1 = genpreds
+    ds2 = realpreds
+    alpha = 0.05       #95% confidence interval
+    N = norm.ppf(1 - alpha/2) # percent point function - inverse of cdf
+
+    # The confidence interval for the difference between the two population
+    # medians is derived through these nxm differences.
+    diffs = sorted([i-j for i in ds1 for j in ds2])
+
+    # For an approximate 100(1-a)% confidence interval first calculate K:
+    k = int(round(ct1*ct2/2 - (N * (ct1*ct2*(ct1+ct2+1)/12)**0.5)))
+
+    # The Kth smallest to the Kth largest of the n x m differences 
+    # ct1 and ct2 should be > ~20
+    mfe_gen_CI = (diffs[k], diffs[len(diffs)-k])
 
     df = pd.DataFrame({'x':x,'y':y})
 
@@ -457,7 +613,7 @@ if __name__ == "__main__":
     axs[0].set_ylabel("Minimum Free Energy")
     axs[0].set_xlabel("")
 
-    reals = read_reals(data_path)
+    reals = read_reals(real_path)
     gens = read_gen_seqs(gen_path)
 
     gen_lens = [len(seq) for seq in gens]
@@ -466,9 +622,6 @@ if __name__ == "__main__":
 
     selected = random.choices([i for i in range(len(real_lens))],k=len(gen_lens))
 
-    print(len(gen_lens))
-    print(len(real_lens))
-
     real_lens_ = [real_lens[i] for i in selected]
 
     y = np.concatenate((gen_lens,real_lens_))
@@ -476,7 +629,6 @@ if __name__ == "__main__":
     real_x = ['Natural' for i in range(len(real_lens_))]
     x = np.concatenate((gen_x,real_x))
 
-    print("new")
     df = pd.DataFrame({'x':x,'y':y})
 
     sns.boxplot(x=df['x'],y=df['y'],ax=axs[1])
@@ -491,7 +643,7 @@ if __name__ == "__main__":
 
     fig.tight_layout()
 
-    plt.savefig('MFE.png')
+    plt.savefig('./../figures/mfe_length.png')
 
     print("#############################################")
     print(f'GC content p-value: {gc_t}')
@@ -500,4 +652,15 @@ if __name__ == "__main__":
     print(f'Dist rand content p-value: {dist_t_rand}')
     print(f'Dist gen content p-value: {dist_t_gen}')
     print("#############################################")
-
+    print(f'GC content ES: {gc_effect_size}')
+    print(f'MFE rand content ES: {mfe_rand_effect_size}')
+    print(f'MFE gen content ES: {mfe_gen_effect_size}')
+    print(f'Dist rand content ES: {dist_rand_effect_size}')
+    print(f'Dist gen content ES: {dist_gen_effect_size}')
+    print("#############################################")
+    print(f'GC content CI: {gc_CI}')
+    print(f'MFE rand content CI: {mfe_rand_CI}')
+    print(f'MFE gen content CI: {mfe_gen_CI}')
+    print(f'Dist rand content CI: {dist_rand_CI}')
+    print(f'Dist gen content CI: {dist_gen_CI}')
+    print("#############################################")

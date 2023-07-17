@@ -74,16 +74,30 @@ def save_samples(logdir, samples, iteration, rev_charmap, annotated=False):
   if annotated:
     np.savetxt(os.path.join(logdir, "samples", "samples_ann_{}".format(iteration)), ann)
       
-def plot(y, x, logdir, name, xlabel=None, ylabel=None, title=None):
+def plot(x, y, logdir, name, xlabel=None, ylabel=None, title=None):
   """Make plot of training curves"""
   plt.close()
-  plt.plot(y,x)
+  plt.plot(x,y)
   if xlabel:
     plt.xlabel(xlabel)
   if ylabel:
     plt.ylabel(ylabel)
   if title:
     plt.title = title
+  plt.savefig(os.path.join(logdir, "{}".format(name) + ".png"))
+
+def validplot(x, y, y_prime, logdir, name, xlabel=None, ylabel=None, title=None):
+  """Make plot of training curves"""
+  plt.close()
+  plt.plot(x,y, label="Train Critic Loss")
+  plt.plot(x,y_prime, label="Validation Wass. Loss")
+  if xlabel:
+    plt.xlabel(xlabel)
+  if ylabel:
+    plt.ylabel(ylabel)
+  if title:
+    plt.title = title
+  plt.legend(loc ="upper right")
   plt.savefig(os.path.join(logdir, "{}".format(name) + ".png"))
   
 def feed(data, batch_size, reuse=True):

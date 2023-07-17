@@ -103,7 +103,7 @@ Build GAN
 model_type = "resnet"
 data_enc_dim = 5
 data_size = SEQ_LEN * data_enc_dim
-generator_layers = 10
+generator_layers = 5
 disc_layers = 10
 lmbda = 10. #lipschitz penalty hyperparameter.
 
@@ -200,12 +200,14 @@ print("Training GAN")
 print("================================================")
 train_iters = ITERS
 disc_iters = 5
-checkpoint_iters = 50
+validation_iters = 10
+checkpoint_iters = 1000
 checkpoint = None
 fixed_latents = np.random.normal(size=[BATCH_SIZE, DIM])
 train_cost = []
 train_counts = []
 valid_cost = []
+valid_dcost = []
 valid_counts = []
 for idx in range(train_iters):
   true_count = idx + 1 + checkpoint_baseline
@@ -219,9 +221,9 @@ for idx in range(train_iters):
     data = next(train_seqs)
     noise = np.random.normal(size=[BATCH_SIZE, DIM])
     cost, _ = session.run([disc_cost, disc_train_op], {latent_vars: noise, real_data: data})
-  train_cost.append(cost)
+  train_cost.append(-cost)
 
-  if true_count % checkpoint_iters == 0:
+  if true_count % validation_iters == 0:
     #validation
     cost_vals = []
     data = next(valid_seqs)
@@ -230,11 +232,12 @@ for idx in range(train_iters):
       score_diff = session.run(disc_diff, {latent_vars: noise, real_data: data})
       cost_vals.append(score_diff)
       data = next(valid_seqs)
-    valid_cost.append(np.mean(cost_vals))
+    valid_cost.append(-np.mean(cost_vals))
+    valid_dcost.append(-cost)
     valid_counts.append(true_count)
     name = "valid_disc_cost"
     if checkpoint_baseline > 0: name += "_{}".format(checkpoint_baseline)
-    lib.plot(valid_counts, valid_cost, logdir, name, xlabel="Iteration", ylabel="Discriminator cost")
+    lib.validplot(valid_counts, valid_cost, valid_dcost, logdir, name, xlabel="Iteration", ylabel="Discriminator cost")
 
     # log results
     print("Iteration {}: train_disc_cost={:.5f}, valid_disc_cost={:.5f}".format(true_count, cost, score_diff))
@@ -242,7 +245,7 @@ for idx in range(train_iters):
     lib.save_samples(logdir, samples, true_count, rev_rna_vocab, annotated=False)
     name = "train_disc_cost"
     if checkpoint_baseline > 0: name += "_{}".format(checkpoint_baseline)
-    lib.plot(train_counts, train_cost, logdir,name, xlabel="Iteration", ylabel="Discriminator cost")
+    lib.plot(train_counts, train_cost, logdir,name, xlabel="Iteration", ylabel="Cost")
     
   # save checkpoint
   if checkpoint_iters and true_count % checkpoint_iters == 0:

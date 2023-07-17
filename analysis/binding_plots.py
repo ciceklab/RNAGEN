@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-p1', type=str, required=False, default='SOX4')
 parser.add_argument('-p2', type=str, required=False, default='SOX2')
 parser.add_argument('-n1', type=int, required=False, default=3000)
-parser.add_argument('-n2', type=int, required=False, default=800)
+parser.add_argument('-n2', type=int, required=False, default=3000)
 
 args = parser.parse_args()
 
@@ -69,8 +69,8 @@ if __name__ == "__main__":
     BATCH_SIZE = 2048
     np.random.seed(35)
 
-    init_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}-targetprotein_initial_binding_scores.txt'
-    best_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}-targetprotein_best_binding_scores.txt'
+    init_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}_initial_binding_scores.txt'
+    best_path = f'./../output/{args.p1}_inv_distance_softmax_method_maxiters_{args.n1}/{args.p1}_best_binding_scores.txt'
 
     seqs_init = read_score(init_path)
     seqs_final = read_score(best_path)
@@ -110,8 +110,8 @@ if __name__ == "__main__":
 
     axs[0,1].set_xlabel("")   
 
-    init_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}-targetprotein_initial_binding_scores.txt'
-    best_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}-targetprotein_best_binding_scores.txt'
+    init_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}_initial_binding_scores.txt'
+    best_path = f'./../output/{args.p2}_inv_distance_softmax_method_maxiters_{args.n2}/{args.p2}_best_binding_scores.txt'
     seqs_init = read_score(init_path)
     seqs_final = read_score(best_path)
 

@@ -277,7 +277,9 @@ if __name__ == '__main__':
 
     deepbind_model_target = base_deepbind_path + paths[0] + '.txt'
 
+    # ADDITIONAL TEST, OPT FOR P1, TEST FOR P2 (Optional)
     deepbind_model_eval = base_deepbind_path + paths[4] + '.txt'
+    MEASURE_TEST = False
 
     dist_protein_1 = float(distances[1])
     dist_protein_2 = float(distances[2])
@@ -286,8 +288,6 @@ if __name__ == '__main__':
     dists = [dist_protein_1,dist_protein_2,dist_protein_3]
 
     weights = softmax(dists)
-
-   
 
     rna_vocab = {"A":0,
                 "C":1,
@@ -300,7 +300,6 @@ if __name__ == '__main__':
     '''
     load the trained WGAN model
     '''
-
     session = tf.keras.backend.get_session()
     gen_handler = tf.train.import_meta_graph(trained_gan_path, import_scope="generator")
     gen_handler.restore(session, trained_gan_path[:-5])
@@ -402,7 +401,6 @@ if __name__ == '__main__':
     tf.add_to_collection('design_op', design_op)
     s = session.run(tf.shape(latents))
 
-
     '''
     Optimization takes place here.
     '''
@@ -415,6 +413,7 @@ if __name__ == '__main__':
     bind_scores_means_target = []
     sequences_list = []
     max_iters=args.n
+
     for opt_iter in tqdm(range(max_iters)):
         generated_sequences = session.run(gen_output)
         generated_sequences = probs_to_chars(generated_sequences)
@@ -469,16 +468,18 @@ if __name__ == '__main__':
     os.mkdir(dirname)
     with open(dirname+protein_name+'_best_binding_sequences.txt', 'w') as f:
         for item in sequences_list[np.argmax(bind_scores_means_total)]:
-            f.write("%s/n" % item)
+            f.write(f"{item}\n")
     with open(dirname+protein_name+'_initial_sequences.txt', 'w') as f:
         for item in sequences_list[0]:
-            f.write("%s/n" % item)
+            f.write(f"{item}\n")
 
 
-    np.savetxt(dirname+"targetprotein_initial_binding_scores"+".txt", bind_scores_list_target[0])
-    np.savetxt(dirname+"targetprotein_test_binding_scores"+".txt", bind_scores_test)
-    np.savetxt(dirname+"targetprotein_best_binding_scores"+".txt", bind_scores_list_target[np.argmax(bind_scores_means_target)])
+    np.savetxt(dirname+f"{protein_name}_initial_binding_scores"+".txt", bind_scores_list_target[0])
+    np.savetxt(dirname+f"{protein_name}_best_binding_scores"+".txt", bind_scores_list_target[np.argmax(bind_scores_means_target)])
 
+    if MEASURE_TEST:
+        np.savetxt(dirname+f"{protein_name}_test_binding_scores"+".txt", bind_scores_test)
+    
     prebind = bind_scores_list_target[0]
     postbind = bind_scores_list_target[np.argmax(bind_scores_means_target)]
 

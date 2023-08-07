@@ -247,6 +247,26 @@ def one_hot_encode(seq, SEQ_LEN=32):
         return np.vstack([np.eye(4)[seq2] , extra])
     return np.eye(4)[seq2]
 
+
+def select_best(scores, target_scores, seqs, USE_TARGET=True):
+    if USE_TARGET:
+        scores = target_scores
+    selected_scores = []
+    selected_seqs = []
+    for i in range(len(scores[0])):
+        best = scores[0][i]
+        target = target_scores[0][i]
+        best_seq = seqs[0][i]
+        for j in range(len(scores)-1):
+            if scores[j+1][i] > best:
+                best = scores[j+1][i]
+                target = target_scores[j+1][i]
+                best_seq = seqs[j+1][i]
+        selected_scores.append(target)
+        selected_seqs.append(best_seq)
+
+    return selected_seqs, selected_scores
+
 '''
 This script is a major component of the project RNAGEN by CicekLab.
 This script needs: i) Trained RNA sequences generator (WGAN), ii) DeepBind model weights for the desired protein. 
@@ -414,6 +434,10 @@ if __name__ == '__main__':
     sequences_list = []
     max_iters=args.n
 
+    scores_history = []
+    sequences_history = []
+    target_scores_history = []
+
     for opt_iter in tqdm(range(max_iters)):
         generated_sequences = session.run(gen_output)
         generated_sequences = probs_to_chars(generated_sequences)
@@ -458,8 +482,12 @@ if __name__ == '__main__':
         bind_scores_means.append(np.mean(bind_scores))
         bind_scores_means2.append(np.mean(bind_scores2))
         bind_scores_means_target.append(np.mean(bind_scores_target))
+        scores_history.append(np.mean(np.array([bind_scores, bind_scores2, bind_scores3]),axis=0))
+        target_scores_history.append(bind_scores_target)
+        sequences_history.append(generated_sequences)
         bind_scores_means_total.append(np.mean(bind_scores + bind_scores2))
 
+    best_sequences, best_scores = select_best(scores_history, target_scores_history, sequences_history)
 
     ohe_genseqs = np.array([one_hot_encode(x) for x in generated_sequences])
     bind_scores_test = model_test.predict(ohe_genseqs) # sox15 - validation protein - closest
@@ -467,15 +495,17 @@ if __name__ == '__main__':
     dirname='./output/'+protein_name+"_inv_distance_softmax_method"+"_maxiters_"+str(max_iters)+"/"
     os.mkdir(dirname)
     with open(dirname+protein_name+'_best_binding_sequences.txt', 'w') as f:
-        for item in sequences_list[np.argmax(bind_scores_means_total)]:
+        for item in best_sequences:
             f.write(f"{item}\n")
     with open(dirname+protein_name+'_initial_sequences.txt', 'w') as f:
         for item in sequences_list[0]:
             f.write(f"{item}\n")
-
-
-    np.savetxt(dirname+f"{protein_name}_initial_binding_scores"+".txt", bind_scores_list_target[0])
-    np.savetxt(dirname+f"{protein_name}_best_binding_scores"+".txt", bind_scores_list_target[np.argmax(bind_scores_means_target)])
+    with open(dirname+protein_name+'_best_binding_scores.txt', 'w') as f:
+        for item in best_scores:
+            f.write(f"{item}\n")
+    with open(dirname+protein_name+'_initial_binding_scores.txt', 'w') as f:
+        for item in bind_scores_list_target[0]:
+            f.write(f"{item}\n")
 
     if MEASURE_TEST:
         np.savetxt(dirname+f"{protein_name}_test_binding_scores"+".txt", bind_scores_test)

@@ -18,6 +18,13 @@ from cliffs_delta import cliffs_delta
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
+colors = ['#2e4045', '#83adb5', '#c7bbc9', '#5e3c58', '#bfb5b2']
+colors = ['#48595e', '#83adb5', '#c7bbc9', '#826b7e', '#bfb5b2']
+colors = ['#455357', '#83adb5', '#c7bbc9', '#826c7e', '#bfb5b2']
+
+# colors = ['#8dd3c7', '#ffffb3', '#bebada']
+palette={'Generated':colors[0],'Natural':colors[3],'Random':colors[4]}
+
 MAX_LEN = 32
 BATCH_SIZE = 2048
 gen_path = './generated.txt'
@@ -100,9 +107,6 @@ def get_gc_content(data):
         seq.replace('*','')
         gc = gc_percentage(seq)
         gc_content.append(gc)
-
-    sns.violinplot(x=gc_content)
-    plt.show()
 
 def get_gc_content_many(data):
     collection = []
@@ -294,25 +298,25 @@ if __name__ == "__main__":
 
     print("Calculating Levenshtein distances. This may take a while ...")
 
-    if os.path.exists('./rand_ham_dist.npy'):
-        dist_rand = np.load('./rand_ham_dist.npy', allow_pickle=True)
+    if os.path.exists('./files/rand_ham_dist.npy'):
+        dist_rand = np.load('./files/rand_ham_dist.npy', allow_pickle=True)
     else:
         dist_rand = hamming_dist(rand,real)
-        with open('./rand_ham_dist.npy', 'wb') as f:
+        with open('./files/rand_ham_dist.npy', 'wb') as f:
             np.save(f,dist_rand)
 
-    if os.path.exists('./real_ham_dist.npy'):
-        dist_real = np.load('./real_ham_dist.npy', allow_pickle=True)
+    if os.path.exists('./files/real_ham_dist.npy'):
+        dist_real = np.load('./files/real_ham_dist.npy', allow_pickle=True)
     else:
         dist_real = hamming_dist(real,real)
-        with open('./real_ham_dist.npy', 'wb') as f:
+        with open('./files/real_ham_dist.npy', 'wb') as f:
             np.save(f,dist_real)        
 
-    if os.path.exists('./gen_ham_dist_.npy'):
-        dist_gen = np.load('./gen_ham_dist_.npy', allow_pickle=True)
+    if os.path.exists('./files/gen_ham_dist.npy'):
+        dist_gen = np.load('./files/gen_ham_dist.npy', allow_pickle=True)
     else:
         dist_gen = hamming_dist(gens, real)
-        with open('./gen_ham_dist_.npy', 'wb') as f:
+        with open('./files/gen_ham_dist.npy', 'wb') as f:
             np.save(f,dist_gen)
 
     fig, axs = plt.subplots(1,2)
@@ -393,7 +397,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame({'x':x,'y':y})
 
-    sns.boxplot(x=df['x'],y=df['y'],ax=axs[0])
+    sns.boxplot(x=df['x'],y=df['y'],ax=axs[0],palette=palette)
 
     axs[0].set_ylabel("Min. Levenshtein Distance")
     axs[0].set_xlabel("")
@@ -449,19 +453,19 @@ if __name__ == "__main__":
 
     df = pd.DataFrame({'x':x,'y':y})
 
-    sns.violinplot(x=df['x'],y=df['y'],ax=axs[1])
+    sns.violinplot(x=df['x'],y=df['y'],ax=axs[1],palette=palette)
 
-    axs[1].set_ylabel("G/C Content");
+    axs[1].set_ylabel("G/C Content")
     axs[1].set_xlabel("")
 
-    axs[0].set_title('A',weight='bold',fontsize=100)
-    axs[1].set_title('B',weight='bold',fontsize=100)
+    axs[0].set_title('A',weight='bold',fontsize=100,loc='left')
+    axs[1].set_title('B',weight='bold',fontsize=100,loc='left')
 
     fig.tight_layout(pad=2)
 
     plt.savefig('./../figures/dist_gc.png')
     plt.clf()
-    fig, axs = plt.subplots(1,2)
+    fig, axs = plt.subplots(1,2,gridspec_kw={'width_ratios': [2, 1]})
 
 
     
@@ -572,7 +576,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame({'x':x,'y':y})
 
-    sns.violinplot(x=df['x'],y=df['y'],ax=axs[0])
+    sns.violinplot(x=df['x'],y=df['y'],ax=axs[0],palette=palette)
 
 
     n1 = len(genpreds)
@@ -608,7 +612,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame({'x':x,'y':y})
 
-    sns.violinplot(x=df['x'],y=df['y'],ax=axs[0])
+    sns.violinplot(x=df['x'],y=df['y'],ax=axs[0],palette=palette)
 
     axs[0].set_ylabel("Minimum Free Energy")
     axs[0].set_xlabel("")
@@ -631,15 +635,15 @@ if __name__ == "__main__":
 
     df = pd.DataFrame({'x':x,'y':y})
 
-    sns.boxplot(x=df['x'],y=df['y'],ax=axs[1])
+    sns.boxplot(x=df['x'],y=df['y'],ax=axs[1],palette=palette)
     
     #############################################################
     
     axs[1].set_ylabel("Sequence Length")
     axs[1].set_xlabel("")
    
-    axs[0].set_title('A',weight='bold',fontsize=100)
-    axs[1].set_title('B',weight='bold',fontsize=100)
+    axs[0].set_title('A',weight='bold',fontsize=100,loc='left')
+    axs[1].set_title('B',weight='bold',fontsize=100,loc='left')
 
     fig.tight_layout()
 

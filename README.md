@@ -60,6 +60,8 @@ Furkan Ozden, Sina Barazandeh, Dogus Akboga, Urartu Ozgur Safak Seker, A. Ercume
 
 Note: The implementation is using Tensorflow 1.15, but the provided code uses Tensorflow 2 for easier installation and use. Tensorflow 1 is available in Tensorflow 2 using the tf.compat.v1 module.
 
+Note: Tensorflow 2 model updates coming soon.
+
 ### Requirements
 
 For easy requirement handling, you can use RNAGEN.yml files to initialize conda environment with requirements installed:
